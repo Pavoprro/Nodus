@@ -1,0 +1,40 @@
+services:
+  # --- 1. SERVICIO DE BASE DE DATOS (SQL Server 2022) ---
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: nodus-sql-server
+    restart: always
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "TuContraseñaFuerte123!" 
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      
+  # --- 2. SERVICIO DE APLICACIÓN WEB (Reflex/Python) ---
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nodus-reflex
+    ports:
+      - "3000:3000"  # Frontend (Lo que ves)
+      - "8000:8000"  # Backend (Lo que conecta los datos) <--- ¡Esto faltaba!
+    depends_on:
+      - db
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REFLEX_ENV=prod
+      # Esta línea es clave para quitar el error rojo:
+      - API_URL=http://localhost:8000
+      - DATABASE_URL=mssql://sa:TuContraseñaFuerte123!@db:1433/NodusDB?driver=ODBC+Driver+17+for+SQL+Server
+    volumes:
+      - .:/app
+    # Este comando obliga a Reflex a escuchar fuera del contenedor:
+    command: reflex run --env prod --backend-host 0.0.0.0 --frontend-port 3000 --backend-port 8000
+    restart: unless-stopped
+
+# Volúmenes para persistencia
+volumes:
+  sqlserver_data:

@@ -1,2 +1,4 @@
+reflex
+pyodbc
 
-reflex==0.8.20
+reflex==0.8.21
