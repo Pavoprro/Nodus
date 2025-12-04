@@ -20,13 +20,13 @@ class ReservaDAO:
             
             evento = cursor.fetchone()
             if not evento:
-                return (-1, 'Evento no encontrado')
+                return [(-1, 'Evento no encontrado')]  # ← CAMBIO
                 
             cupo_maximo, cupos_ocupados = evento
             cupos_disponibles = cupo_maximo - cupos_ocupados
             
             if cupos_disponibles < cantidad_personas:
-                return (-1, 'No hay cupos disponibles')
+                return [(-1, 'No hay cupos disponibles')]  # ← CAMBIO
             
             # 2. Crear reserva
             cursor.execute("""
@@ -53,64 +53,45 @@ class ReservaDAO:
             self.bd.conexion.commit()
             self.bd.cerrarConexionBD()
             
-            return (id_reserva, 'Success')
+            return [(id_reserva, 'Success')]  # ← CAMBIO
             
         except Exception as e:
             print(f"❌ Error creando reserva: {e}")
             if self.bd.conexion:
                 self.bd.conexion.rollback()
                 self.bd.cerrarConexionBD()
-            return (-1, f'Error: {str(e)}')
+            return [(-1, f'Error: {str(e)}')]  # ← CAMBIO
     
     def cancelar_reserva(self, id_reserva):
+        """Cancela una reserva usando el SP"""
         try:
             self.bd.establecerConexionBD()
             cursor = self.bd.conexion.cursor()
             
-            # 1. Obtener datos de la reserva
-            cursor.execute("""
-                SELECT id_evento, cantidad_personas, id_usuario 
-                FROM Reservas 
-                WHERE id_reserva = ? AND estado = 'Activa'
-            """, [id_reserva])
+            # Ejecutar el SP
+            cursor.execute("EXEC sp_CancelReservation @id_reserva = ?", [id_reserva])
             
-            reserva = cursor.fetchone()
-            if not reserva:
-                return 'Reserva no encontrada o ya cancelada'
-                
-            id_evento, cantidad_personas, id_usuario = reserva
-            
-            # 2. Cancelar reserva
-            cursor.execute("""
-                UPDATE Reservas 
-                SET estado = 'Cancelada'
-                WHERE id_reserva = ?
-            """, [id_reserva])
-            
-            # 3. Liberar cupos
-            cursor.execute("""
-                UPDATE Eventos 
-                SET cupos_ocupados = cupos_ocupados - ?
-                WHERE id_evento = ?
-            """, (cantidad_personas, id_evento))
-            
-            # 4. Crear notificación
-            cursor.execute("""
-                INSERT INTO Notificaciones (id_usuario, tipo, titulo, mensaje, id_evento_relacionado)
-                VALUES (?, 'cancelado', 'Reserva cancelada', 'Tu reserva ha sido cancelada', ?)
-            """, (id_usuario, id_evento))
+            # Obtener el resultado
+            result = cursor.fetchone()
             
             self.bd.conexion.commit()
             self.bd.cerrarConexionBD()
             
-            return 'Success'
-            
+            if result and result[0] == 'Success':
+                print(f"✅ Reserva {id_reserva} cancelada correctamente")
+                return 'Success'
+            else:
+                mensaje = result[1] if result else 'Error desconocido'
+                print(f"❌ Error cancelando reserva: {mensaje}")
+                return mensaje
+                
         except Exception as e:
             print(f"❌ Error cancelando reserva: {e}")
             if self.bd.conexion:
                 self.bd.conexion.rollback()
                 self.bd.cerrarConexionBD()
             return f'Error: {str(e)}'
+
     
     def reservas_usuario(self, id_usuario):
         self.bd.establecerConexionBD()
